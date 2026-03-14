@@ -105,7 +105,9 @@ endif
 
 BOOST = -lboost_thread $(MY_BOOST)
 
-CFLAGS += $(ARCH) $(MY_CFLAGS) $(GDEBUG) -Wextra -Wall $(OPTIM) -I$(ROOT) -I$(ROOT)/deps -pthread $(PROF) $(DEBUG) $(MOD) $(GF2N_LONG) $(PREP_DIR) $(SSL_DIR) $(SECURE) -std=c++17 -Werror
+# F4attack-changes: Removed -Werror as this causes issues with some BOOST versions. This has nothing to do with the attack.
+CFLAGS += $(ARCH) $(MY_CFLAGS) $(GDEBUG) -Wextra -Wall $(OPTIM) -I$(ROOT) -I$(ROOT)/deps -pthread $(PROF) $(DEBUG) $(MOD) $(GF2N_LONG) $(PREP_DIR) $(SSL_DIR) $(SECURE) -std=c++17
+# end of F4attack-changes
 CFLAGS += $(BREW_CFLAGS)
 CPPFLAGS = $(CFLAGS)
 LD = $(CXX)

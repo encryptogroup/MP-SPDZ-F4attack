@@ -1,0 +1,9 @@
+# F4attack-changes: New example circuit, this is the  circuit from Fig. 2 in the paper
+a = sint.get_input_from(0)
+b = sint.get_input_from(1)
+d = sint.get_input_from(3)
+
+c = a * b
+e = c * d
+e = e.reveal_to(0)
+# end of F4attack-changes

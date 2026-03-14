@@ -27,6 +27,10 @@ class Rep4 : public ProtocolBase<T>
     array<vector<open_type>, 5> add_shares;
     array<open_type, 5> dotprod_shares;
     vector<int> bit_lengths;
+    // F4attack-changes: Helper variables for internal bookkeeping
+    T F4attack_val_d; // storage for own shares of value d
+    size_t F4attack_mult_counter; // counter for current multiplication gate
+    // end of F4attack-changes
 
     class ResTuple
     {
