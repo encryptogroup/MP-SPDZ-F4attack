@@ -19,9 +19,10 @@ code. We take the following into consideration:
 * We have followed a responsible disclosure process, where we informed the involved maintainers
 about the vulnerability and coordinated with them that the vulnerabilities were closed before
 disclosure of our paper and this code.
-* Hence, the vulnerability in MP-SPDZ has been fixed in [version TBA]() before this repository was
-made public, and maintainers of other affected implementations of vulnerable protocols (that we are
-aware of) have also deployed fixes.
+* Hence, the vulnerability in MP-SPDZ has been fixed in
+[commit 85307a1](https://github.com/data61/MP-SPDZ/commit/85307a1b6e50188975b564fbc012c6114d209fd6)
+/ [version TBA]() before this repository was made public, and maintainers of other affected
+implementations of vulnerable protocols (that we are aware of) have also deployed fixes.
 * Still, it can not be excluded that outdated, vulnerable versions are being used. Yet, the
 following holds:
 * MP-SPDZ contains a disclaimer that it should not be used in critical production, but is aimed to
