@@ -124,3 +124,9 @@ _build/
 # temp doc files
 doc/readme.md
 doc/xml
+# F4attack-changes: logfiles for party outputs
+log_p0.txt
+log_p1.txt
+log_p2.txt
+log_p3.txt
+# end of F4attack-changes

@@ -61,38 +61,114 @@ make -j8 rep4-ring-party.x
 
 In the following, the example circuit compiled before where party P2 has no inputs or outputs, i.e.,
 should not learn anything, malicious P2 will deviate from the protocol to check if an input named
-```d```, provided by party P3, equals ```42``` or does not. In all cases, some parties will detect
-the deviation, and will abort the protocol execution. In this case, MP-SPDZ kills the corresponding
-process, leading to other parties which did not detect an inconsistency (yet) crashing as they loose
-connection to the aborting party. This is per the design of MP-SPDZ:
-**Crashes of parties are to be expected in the following, per design!**
+```d```, provided by party P3, equals ```42``` or does not.
+
+**Error messages and crashing parties are to be expected, as cheating P2 always causes an abort:**
+In all cases, some parties will detect the deviation, and will abort the protocol execution. In this
+case, MP-SPDZ kills the corresponding process, leading to other parties which did not detect an
+inconsistency (yet) crashing as they loose connection to the aborting party. This is per the design
+of MP-SPDZ which does not necessarily gracefully terminate a party in case of an abort.
+
 What matters is that, before potentially crashing, P2 will be able to successfully output if the
-input of P3 was ```42``` or not. Please continue with the following commands:
+input of P3 was ```42``` or not. Please continue with the following commands. The output will end
+with a summary, showing that the parties abort (throwing some error) and, more importantly,
+containing the specified input ```d``` by P3, P2's prediction that ```d=42```, and P2's extracted
+info telling if this prediction was correct.
 
 ```sh
 # Evaluate the example circuit with P3 providing input d=1 (the used argument):
-# (parties will eventually crash due to failing consistency checks)
+# (errors and crashes in the CLI output are expected, see explanation above)
 ./run_f4_attack.sh 1
 # In the outputs, observe that
 # - The parties abort, either because of a hash mismatch or due to being disconnected
 #     from another aborting party.
 # - Corrupt P2 adds an offset of +1 to one message, guesses that d=42, and notices that
 #     this was incorrect (as d=1).
+# - (You may scroll up in the CLI output to view the full output of all parties.)
 
 # Evaluate the example circuit with P3 providing input d=42 (the used argument):
-# (parties will eventually crash due to failing consistency checks)
+# (errors and crashes in the CLI output are expected, see explanation above)
 ./run_f4_attack.sh 42
 # In the outputs, observe that
 # - The parties abort, either because of a hash mismatch or due to being disconnected
 #     from another aborting party.
 # - Corrupt P2 adds an offset of +1 to one message, guesses that d=42, and notices that
 #     this guess was correct!
+# - (You may scroll up in the CLI output to view the full output of all parties.)
 
 # You may also try for other (sufficiently small, to fit in the default computation
 # domain) integers which leads to the same behavior as the case d = 1.
 
 # Overall, corrupt P2 is able to distinguish between P3 having input d=42 and input d!=42.
 ```
+
+Example outputs:
+For ```./run_f4_attack.sh 1```:
+```
+P0 inputs a = 4
+P1 inputs b = 8
+P3 inputs d = 1
+
+Starting P0, P1, P2, P3 ...
+P1, P2, P3, P4 finished
+
+[OMITTING FULL CLI OUTPUTS OF ALL PARTIES HERE]
+
+######################
+### Attack Summary ###
+######################
+# All parties abort due to failing consistency checks caused by cheating:
+# (In MP-SPDZ, an aborting party simply crashes, either directly due to a
+# hash mismatch or loosing connection to another aborting party)
+P0 error:   what():  read_some: Connection reset by peer [system:104]
+P1 error: Fatal error at attackable_demo_circuit-0:3 (0xad): hash mismatch for sender 2 and backup 3
+P2 error: Fatal error at attackable_demo_circuit-0:3 (0xad): hash mismatch for sender 1 and backup 3
+P3 error:   what():  write_some: Broken pipe [system:32]
+
+# P3 gave input:
+d = 1
+# Malicious P2 cheated, made a guess for d and checked if correct:
+Cheating by adding offset +1 to outgoing message!
+Guessing that d=42...
+Prior guess for d was not correct.
+
+# (scroll up for full CLI output of each party)
+```
+For ```./run_f4_attack.sh 42```:
+```
+P0 inputs a = 4
+P1 inputs b = 8
+P3 inputs d = 42
+
+Starting P0, P1, P2, P3 ...
+P1, P2, P3, P4 finished
+
+[OMITTING FULL CLI OUTPUTS OF ALL PARTIES HERE]
+
+######################
+### Attack Summary ###
+######################
+# All parties abort due to failing consistency checks caused by cheating:
+# (In MP-SPDZ, an aborting party simply crashes, either directly due to a
+# hash mismatch or loosing connection to another aborting party)
+P0 error:   what():  read_some: Connection reset by peer [system:104]
+P1 error: Fatal error at attackable_demo_circuit-0:3 (0xad): hash mismatch for sender 2 and backup 3
+P2 error: Fatal error at attackable_demo_circuit-0:3 (0xad): hash mismatch for sender 1 and backup 3
+P3 error:   what():  write_some: Broken pipe [system:32]
+
+# P3 gave input:
+d = 42
+# Malicious P2 cheated, made a guess for d and checked if correct:
+Cheating by adding offset +1 to outgoing message!
+Guessing that d=42...
+Prior guess for d was correct!
+
+# (scroll up for full CLI output of each party)
+```
+
+Testing for another ```d``` than ```42``` can also be achieved if desired. For that, in
+[Protocols/Rep4.hpp](Protocols/Rep4.hpp), change the value of ```d_test``` in line 227 and
+recompile (```make -j8 rep4-ring-party.x```) before running ```./run_f4_attack.sh [d]``` again.
 
 ## Details and Explanation:
 
@@ -109,6 +185,9 @@ exist minor other QOL modifications which do not alter the protocol behavior lik
 processes). Outside of these modifications, we provide no additional documentation as this is
 unchanged code and documentation from the original MP-SPDZ implementation.
 **Our attack implementation only consists of all the changes annotated with the aforementioned comments!**
+Besides everything enclosed by ```F4attack-changes: [...]``` and ```end of F4attack-changes```, the
+only other changes to files are this README file replacing the original one of MP-SPDZ, and the
+License where we prepend a paragraph regarding our changes.
 
 First, [Programs/Source/attackable_demo_circuit.mpc](Programs/Source/attackable_demo_circuit.mpc)
 implements our circuit from Fig. 2 in [our paper](https://eprint.iacr.org/2026/234) in MP-SPDZ.
